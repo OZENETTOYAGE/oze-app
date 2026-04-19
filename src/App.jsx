@@ -1,5 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import * as XLSX from "xlsx";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  "https://wjskijzgvmwhhaecsper.supabase.co",
+  "sb_publishable_WYuzThpt_8qYh3SjHD-Vdg_s1lYeivc"
+);
 
 /* ═══════════════════════════════════════════════════════════════════
    OZÉ NETTOYAGE — APPLICATION COMPLÈTE v3
@@ -1426,16 +1432,19 @@ function PageUtilisateurs({ users, setUsers, currentUser, setCurrentUser }) {
   const [editU, setEditU] = useState(null);
   const [form, setForm] = useState({ nom: "", role: "salarie", pin: "", email: "", tel: "", poste: "", actif: true });
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const save = () => {
-    let u;
+  const save = async () => {
     if (editU) {
       const updated = { ...editU, ...form, avatar: form.nom.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() };
-      u = users.map(x => x.id === editU.id ? updated : x);
+      await supabase.from("oze_users").update(form).eq("id", editU.id);
+      const newList = users.map(x => x.id === editU.id ? updated : x);
+      setUsers(newList);
       if (currentUser && currentUser.id === editU.id) setCurrentUser(updated);
     } else {
-      u = [{ ...form, id: "U" + uid(), avatar: form.nom.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() }, ...users];
+      const newUser = { ...form, id: "U" + uid(), avatar: form.nom.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() };
+      await supabase.from("oze_users").insert(newUser);
+      setUsers([newUser, ...users]);
     }
-    setUsers(u); LS.set("oze_users", u); setShowForm(false); setEditU(null);
+    setShowForm(false); setEditU(null);
   };
   const openEdit = u => { setEditU(u); setForm({ nom: u.nom, role: u.role, pin: u.pin, email: u.email || "", tel: u.tel || "", poste: u.poste || "", actif: u.actif }); setShowForm(true); };
   return (
@@ -1463,8 +1472,8 @@ function PageUtilisateurs({ users, setUsers, currentUser, setCurrentUser }) {
             </div>
             <div style={{ display: "flex", gap: 7 }}>
               <Btn onClick={() => openEdit(u)} v="secondary" size="sm"><Ico n="edit" s={13} /></Btn>
-              <Btn onClick={() => { const up = users.map(x => x.id === u.id ? { ...x, actif: !x.actif } : x); setUsers(up); LS.set("oze_users", up); }} v={u.actif ? "danger" : "secondary"} size="sm"><Ico n={u.actif ? "x" : "check"} s={13} /></Btn>
-              <Btn onClick={() => { if (currentUser && currentUser.id === u.id) return; if (!window.confirm(`Supprimer ${u.nom} ?`)) return; const up = users.filter(x => x.id !== u.id); setUsers(up); LS.set("oze_users", up); }} v="danger" size="sm" title="Supprimer" disabled={currentUser && currentUser.id === u.id}><Ico n="trash" s={13} /></Btn>
+              <Btn onClick={async () => { await supabase.from("oze_users").update({ actif: !u.actif }).eq("id", u.id); const up = users.map(x => x.id === u.id ? { ...x, actif: !u.actif } : x); setUsers(up); }} v={u.actif ? "danger" : "secondary"} size="sm"><Ico n={u.actif ? "x" : "check"} s={13} /></Btn>
+              <Btn onClick={async () => { if (currentUser && currentUser.id === u.id) return; if (!window.confirm(`Supprimer ${u.nom} ?`)) return; await supabase.from("oze_users").delete().eq("id", u.id); setUsers(users.filter(x => x.id !== u.id)); }} v="danger" size="sm" title="Supprimer" disabled={!!(currentUser && currentUser.id === u.id)}><Ico n="trash" s={13} /></Btn>
             </div>
           </Card>
         ))}
@@ -1512,7 +1521,27 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showNotifs, setShowNotifs] = useState(false);
 
-  const [users, setUsers] = useState(() => LS.get("oze_users", USERS_INIT));
+  const [users, setUsers] = useState([]);
+
+  useEffect(() => {
+    // Chargement initial depuis Supabase
+    supabase.from("oze_users").select("*").then(({ data }) => {
+      if (data && data.length > 0) setUsers(data);
+      else setUsers(USERS_INIT); // fallback si table vide
+    });
+
+    // Écoute en temps réel — se met à jour sur tous les appareils
+    const channel = supabase
+      .channel("oze_users_changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "oze_users" }, () => {
+        supabase.from("oze_users").select("*").then(({ data }) => {
+          if (data) setUsers(data);
+        });
+      })
+      .subscribe();
+
+    return () => supabase.removeChannel(channel);
+  }, []);
   const [chantiers, setChantiers] = useState(() => LS.get("oze_chantiers", CHANTIERS_INIT));
   const [pointages, setPointages] = useState(() => LS.get("oze_pointages", []));
   const [devis, setDevis] = useState(() => LS.get("oze_devis", DEVIS_INIT));
@@ -1566,7 +1595,7 @@ export default function App() {
       );
       case "devis": return <PageDevis {...sharedProps} mode="devis" />;
       case "factures": return <PageDevis {...sharedProps} mode="factures" />;
-      case "utilisateurs": return <PageUtilisateurs users={users} setUsers={setUsers} currentUser={user} setCurrentUser={setUser} />;
+      case "utilisateurs": return <PageUtilisateurs users={users} setUsers={setUsers} />;
       default: return null;
     }
   };
