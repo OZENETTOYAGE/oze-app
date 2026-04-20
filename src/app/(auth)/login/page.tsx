@@ -3,6 +3,10 @@
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import type { Metadata } from "next";
+
+// Note: metadata export doesn't work in client components
+// Use a parent server component or metadata in layout if needed
 
 function LoginForm() {
   const router = useRouter();
@@ -17,19 +21,14 @@ function LoginForm() {
     setLoading(true);
     setError("");
 
-    console.log("URL:", process.env.NEXT_PUBLIC_SUPABASE_URL);
-    console.log("KEY:", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-
     const supabase = createClient();
-
     const { error: authError } = await supabase.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
       password,
     });
 
     if (authError) {
-      console.error("Supabase auth error:", authError);
-      setError(authError.message || "Erreur de connexion.");
+      setError("Email ou mot de passe incorrect.");
       setLoading(false);
       return;
     }
@@ -47,6 +46,7 @@ function LoginForm() {
       style={{ background: "linear-gradient(135deg,#0a1228,#1A2B5F)" }}
     >
       <div className="w-full max-w-sm">
+        {/* Logo */}
         <div className="mb-8 text-center">
           <div
             className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl shadow-lg"
