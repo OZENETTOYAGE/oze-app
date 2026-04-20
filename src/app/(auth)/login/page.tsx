@@ -17,6 +17,9 @@ function LoginForm() {
     setLoading(true);
     setError("");
 
+    console.log("URL:", process.env.NEXT_PUBLIC_SUPABASE_URL);
+    console.log("KEY:", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+
     const supabase = createClient();
 
     const { error: authError } = await supabase.auth.signInWithPassword({
@@ -44,7 +47,6 @@ function LoginForm() {
       style={{ background: "linear-gradient(135deg,#0a1228,#1A2B5F)" }}
     >
       <div className="w-full max-w-sm">
-        {/* Logo */}
         <div className="mb-8 text-center">
           <div
             className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl shadow-lg"
